@@ -1,0 +1,27 @@
+# Graphiti Knowledge Graph Dependencies
+# ======================================
+
+# Core
+graphiti-core>=0.24.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# API Server (for WhatsApp Assistant integration)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# HTTP Client
+httpx>=0.25.0
+
+# Google Workspace (Gmail)
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-api-python-client>=2.0.0
+
+# Microsoft 365 (Outlook)
+msal>=1.20.0
+
+# Async support
+asyncio-throttle>=1.0.0
+aiofiles>=23.0.0
