@@ -1,8 +1,9 @@
 """
-Custom entity types for email knowledge graph extraction.
+Custom entity types for CHAMP Graph knowledge graph extraction.
 
 These Pydantic models guide the LLM to extract specific entity types
-from email content, improving extraction accuracy for sales/marketing use cases.
+from multi-modal communication content (emails, calls, SMS, LinkedIn, meetings),
+improving extraction accuracy for sales/marketing use cases.
 """
 from typing import Optional, List
 from pydantic import BaseModel, Field
@@ -68,6 +69,23 @@ class Communication(BaseModel):
     )
 
 
+class Opportunity(BaseModel):
+    """A sales opportunity or deal being pursued with an account"""
+    name: str = Field(..., description="Opportunity or deal name")
+    stage: Optional[str] = Field(
+        None,
+        description="Stage: prospect, discovery, proposal, negotiation, closed-won, closed-lost"
+    )
+    value: Optional[str] = Field(None, description="Estimated deal value")
+
+
+class Branch(BaseModel):
+    """A branch, division, or business unit of an account"""
+    name: str = Field(..., description="Branch, division, or business unit name")
+    location: Optional[str] = Field(None, description="Geographic location")
+    parent_account: Optional[str] = Field(None, description="Parent company name")
+
+
 # Entity types dictionary for Graphiti
 ENTITY_TYPES = {
     'Contact': Contact,
@@ -76,4 +94,6 @@ ENTITY_TYPES = {
     'PersonalDetail': PersonalDetail,
     'Topic': Topic,
     'Communication': Communication,
+    'Opportunity': Opportunity,
+    'Branch': Branch,
 }

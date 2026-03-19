@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     ms_tenant_id: Optional[str] = Field(default=None)
     ms_user_email: Optional[str] = Field(default=None)
 
+    # API Authentication
+    api_key: Optional[str] = Field(default=None, description="API key for X-API-Key header auth. If unset, auth is disabled.")
+
     # Team Configuration
     team_domains: str = Field(default="yourcompany.com")
 

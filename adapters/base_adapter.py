@@ -1,30 +1,33 @@
 """
-Base adapter interface for email providers.
+Base adapter interfaces for CHAMP Graph data source adapters.
 
-All email provider adapters (Gmail, Outlook, IMAP) must implement this interface.
+BaseAdapter: Generic interface for any data source (calls, SMS, LinkedIn, etc.)
+BaseEmailAdapter: Specialized interface for email providers (Gmail, Outlook, IMAP).
 """
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import AsyncIterator, List, Optional
 
+from pydantic import BaseModel
+
 from models.email import Email
 
 
-class BaseEmailAdapter(ABC):
+class BaseAdapter(ABC):
     """
-    Abstract base class for email provider adapters.
+    Abstract base class for all CHAMP Graph data source adapters.
 
-    Implementations must provide methods to:
-    - Connect/disconnect from the email service
-    - Fetch emails with various filters
-    - Fetch emails by domain (for account-based filtering)
-    - Get email threads
+    Any data source (email, calls, SMS, LinkedIn, meetings) must implement
+    this interface. Implementations are responsible for:
+    - Connecting/disconnecting from the data source
+    - Fetching items as normalized Pydantic models
+    - Retrieving conversation threads
     """
 
     @abstractmethod
     async def connect(self) -> None:
         """
-        Establish connection to email provider.
+        Establish connection to data source.
 
         This should handle authentication and initialization.
         """
@@ -33,11 +36,86 @@ class BaseEmailAdapter(ABC):
     @abstractmethod
     async def disconnect(self) -> None:
         """
-        Close connection to email provider.
+        Close connection to data source.
 
         Clean up any resources, close sessions, etc.
         """
         pass
+
+    @abstractmethod
+    async def fetch_items(
+        self,
+        since: Optional[datetime] = None,
+        until: Optional[datetime] = None,
+        limit: Optional[int] = None,
+        **kwargs,
+    ) -> AsyncIterator[BaseModel]:
+        """
+        Fetch items from the data source.
+
+        Parameters
+        ----------
+        since : datetime, optional
+            Only fetch items after this date
+        until : datetime, optional
+            Only fetch items before this date
+        limit : int, optional
+            Maximum number of items to fetch
+        **kwargs
+            Source-specific filter parameters
+
+        Yields
+        ------
+        BaseModel
+            Normalized data items (Email, CallTranscript, TextMessage, etc.)
+        """
+        pass
+
+    @abstractmethod
+    async def get_conversation(self, conversation_id: str) -> List[BaseModel]:
+        """
+        Get all items in a conversation thread.
+
+        Parameters
+        ----------
+        conversation_id : str
+            The thread/conversation ID
+
+        Returns
+        -------
+        list of BaseModel
+            All items in the conversation, ordered by date
+        """
+        pass
+
+
+class BaseEmailAdapter(BaseAdapter):
+    """
+    Abstract base class for email provider adapters.
+
+    Extends BaseAdapter with email-specific methods (domain filtering,
+    email search, thread retrieval). Gmail and Outlook adapters extend this.
+    """
+
+    async def fetch_items(
+        self,
+        since: Optional[datetime] = None,
+        until: Optional[datetime] = None,
+        limit: Optional[int] = None,
+        **kwargs,
+    ) -> AsyncIterator[Email]:
+        """Delegates to fetch_emails() for backward compatibility."""
+        async for email in self.fetch_emails(
+            since=since, until=until, limit=limit,
+            from_addresses=kwargs.get('from_addresses'),
+            to_addresses=kwargs.get('to_addresses'),
+            labels=kwargs.get('labels'),
+        ):
+            yield email
+
+    async def get_conversation(self, conversation_id: str) -> List[Email]:
+        """Delegates to get_thread() for backward compatibility."""
+        return await self.get_thread(conversation_id)
 
     @abstractmethod
     async def fetch_emails(

@@ -1,5 +1,5 @@
-# Graphiti Knowledge Graph Dependencies
-# ======================================
+# CHAMP Graph Dependencies
+# ========================
 
 # Core
 graphiti-core>=0.24.0
@@ -7,9 +7,12 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 
-# API Server (for WhatsApp Assistant integration)
+# API Server
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+
+# MCP (Model Context Protocol) server for agent tool discovery
+fastmcp>=2.0.0
 
 # HTTP Client
 httpx>=0.25.0
@@ -25,3 +28,8 @@ msal>=1.20.0
 # Async support
 asyncio-throttle>=1.0.0
 aiofiles>=23.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0

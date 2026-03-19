@@ -1,8 +1,9 @@
 """
-Graphiti service wrapper for email knowledge graph operations.
+CHAMP Graph service wrapper for knowledge graph operations.
 
-Provides a high-level interface for ingesting emails and querying
-the knowledge graph.
+Provides a high-level interface for ingesting multi-modal data
+(emails, calls, SMS, LinkedIn, meetings) and querying the
+knowledge graph.
 """
 import logging
 from datetime import datetime, timezone
@@ -32,7 +33,8 @@ class GraphitiService:
 
     Handles:
     - Connection management
-    - Email ingestion (single and bulk)
+    - Generic episode ingestion (any data source)
+    - Email ingestion (convenience wrappers)
     - Search and query operations
     - Graph visualization export
     """
@@ -116,6 +118,104 @@ class GraphitiService:
             self.client = None
         logger.info("Graphiti connection closed")
 
+    # === Generic ingestion methods (any data source) ===
+
+    async def ingest_episode(
+        self,
+        content: str,
+        name: str,
+        account_name: str,
+        source_description: str,
+        reference_time: datetime,
+        source: EpisodeType = EpisodeType.message,
+    ) -> None:
+        """
+        Ingest a single episode from any data source.
+
+        This is the core generic ingestion method. All source-specific
+        convenience methods (ingest_email, etc.) delegate to this.
+
+        Parameters
+        ----------
+        content : str
+            Formatted text content for LLM extraction
+        name : str
+            Human-readable episode name (e.g., "Email: Subject line")
+        account_name : str
+            Name of the account (used as group_id)
+        source_description : str
+            Description of the data source (e.g., "Email via email (outbound)")
+        reference_time : datetime
+            When this interaction occurred
+        source : EpisodeType
+            Graphiti episode type classification
+        """
+        if not self.client:
+            raise RuntimeError("Not connected. Call connect() first.")
+
+        group_id = self._normalize_group_id(account_name)
+
+        logger.debug(f"Ingesting episode: {name[:50]} to group {group_id}")
+
+        await self.client.add_episode(
+            name=name,
+            episode_body=content,
+            source=source,
+            source_description=source_description,
+            reference_time=reference_time,
+            group_id=group_id,
+            entity_types=self.entity_types,
+            edge_types=self.edge_types,
+            edge_type_map=self.edge_type_map,
+        )
+
+    async def ingest_episodes_bulk(
+        self,
+        episodes: List[Dict[str, Any]],
+        account_name: str,
+    ) -> None:
+        """
+        Bulk ingest multiple episodes from any data source.
+
+        Parameters
+        ----------
+        episodes : list of dict
+            Each dict must have keys: name, content, reference_time, source_description.
+            Optional keys: source (defaults to EpisodeType.message).
+        account_name : str
+            Name of the account (used as group_id)
+        """
+        if not self.client:
+            raise RuntimeError("Not connected. Call connect() first.")
+
+        if not episodes:
+            return
+
+        group_id = self._normalize_group_id(account_name)
+
+        raw_episodes = [
+            RawEpisode(
+                name=ep['name'],
+                content=ep['content'],
+                reference_time=ep['reference_time'],
+                source=ep.get('source', EpisodeType.message),
+                source_description=ep['source_description'],
+            )
+            for ep in episodes
+        ]
+
+        logger.info(f"Bulk ingesting {len(episodes)} episodes to group {group_id}")
+
+        await self.client.add_episode_bulk(
+            raw_episodes,
+            group_id=group_id,
+            entity_types=self.entity_types,
+            edge_types=self.edge_types,
+            edge_type_map=self.edge_type_map,
+        )
+
+    # === Email convenience wrappers (backward compatible) ===
+
     async def ingest_email(
         self,
         email: Email,
@@ -124,6 +224,8 @@ class GraphitiService:
         """
         Ingest a single email as an episode.
 
+        Convenience wrapper around ingest_episode() for email data.
+
         Parameters
         ----------
         email : Email
@@ -131,24 +233,13 @@ class GraphitiService:
         account_name : str
             Name of the account (used as group_id)
         """
-        if not self.client:
-            raise RuntimeError("Not connected. Call connect() first.")
-
-        episode_content = email.to_episode_content()
-        group_id = self._normalize_group_id(account_name)
-
-        logger.debug(f"Ingesting email: {email.subject[:50]} to group {group_id}")
-
-        await self.client.add_episode(
+        await self.ingest_episode(
+            content=email.to_episode_content(),
             name=f"Email: {email.subject[:50]}",
-            episode_body=episode_content,
-            source=EpisodeType.message,
+            account_name=account_name,
             source_description=f"Email via {email.channel} ({email.direction.value})",
             reference_time=email.timestamp,
-            group_id=group_id,
-            entity_types=self.entity_types,
-            edge_types=self.edge_types,
-            edge_type_map=self.edge_type_map,
+            source=EpisodeType.message,
         )
 
     async def ingest_emails_bulk(
@@ -159,6 +250,8 @@ class GraphitiService:
         """
         Bulk ingest multiple emails.
 
+        Convenience wrapper around ingest_episodes_bulk() for email data.
+
         Parameters
         ----------
         emails : list of Email
@@ -166,34 +259,21 @@ class GraphitiService:
         account_name : str
             Name of the account (used as group_id)
         """
-        if not self.client:
-            raise RuntimeError("Not connected. Call connect() first.")
-
         if not emails:
             return
 
-        group_id = self._normalize_group_id(account_name)
-
-        raw_episodes = [
-            RawEpisode(
-                name=f"Email: {email.subject[:50]}",
-                content=email.to_episode_content(),
-                reference_time=email.timestamp,
-                source=EpisodeType.message,
-                source_description=f"Email via {email.channel} ({email.direction.value})",
-            )
+        episodes = [
+            {
+                'name': f"Email: {email.subject[:50]}",
+                'content': email.to_episode_content(),
+                'reference_time': email.timestamp,
+                'source': EpisodeType.message,
+                'source_description': f"Email via {email.channel} ({email.direction.value})",
+            }
             for email in emails
         ]
 
-        logger.info(f"Bulk ingesting {len(emails)} emails to group {group_id}")
-
-        await self.client.add_episode_bulk(
-            raw_episodes,
-            group_id=group_id,
-            entity_types=self.entity_types,
-            edge_types=self.edge_types,
-            edge_type_map=self.edge_type_map,
-        )
+        await self.ingest_episodes_bulk(episodes, account_name)
 
     async def search_account(
         self,
@@ -330,11 +410,313 @@ class GraphitiService:
         )
         return results['edges']
 
+    # === Timeline & Relationship Map ===
+
+    async def query_timeline(
+        self,
+        account_name: str,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get cross-channel communication timeline.
+
+        Returns episodes ordered by time, enriched with channel metadata.
+        """
+        if not self.client:
+            raise RuntimeError("Not connected. Call connect() first.")
+
+        group_id = self._normalize_group_id(account_name)
+
+        episodes = await self.client.retrieve_episodes(
+            reference_time=datetime.now(timezone.utc),
+            last_n=limit,
+            group_ids=[group_id],
+        )
+
+        timeline = []
+        for e in episodes:
+            source_desc = e.source_description if hasattr(e, 'source_description') else ''
+            ep_name = e.name if hasattr(e, 'name') else ''
+            channel = self._detect_channel(source_desc or ep_name or '')
+            direction = self._detect_direction(source_desc or '')
+            summary = None
+            if e.content:
+                summary = (e.content[:200] + '...') if len(e.content) > 200 else e.content
+
+            timeline.append({
+                'timestamp': e.valid_at.isoformat() if e.valid_at else None,
+                'channel': channel,
+                'name': ep_name,
+                'summary': summary,
+                'direction': direction,
+            })
+
+        return timeline
+
+    async def query_relationship_map(self, account_name: str) -> List[Dict[str, Any]]:
+        """
+        Get contact relationship map for an account.
+
+        Returns all edges with resolved source/target names.
+        """
+        results = await self.search_account(
+            account_name,
+            "All relationships, org structure, reporting lines, interactions between contacts and team members",
+            num_results=200,
+        )
+
+        node_names = {n['uuid']: n['name'] for n in results.get('nodes', [])}
+
+        relationships = []
+        for edge in results.get('edges', []):
+            source_name = node_names.get(edge.get('source_node_uuid'), 'Unknown')
+            target_name = node_names.get(edge.get('target_node_uuid'), 'Unknown')
+            relationships.append({
+                'source': source_name,
+                'target': target_name,
+                'relationship_type': edge.get('name', ''),
+                'fact': edge.get('fact'),
+                'valid_at': edge.get('valid_at'),
+            })
+
+        return relationships
+
+    # === Intelligence queries ===
+
+    async def query_cross_salesperson_overlap(
+        self,
+        account_name: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find contacts engaged by multiple team members.
+
+        Returns contacts with 2+ team members, sorted by overlap count.
+        """
+        results = await self.search_account(
+            account_name,
+            "Which contacts have been contacted by multiple team members? Show all team member interactions with each contact.",
+            num_results=200,
+        )
+
+        node_info = {n['uuid']: n for n in results.get('nodes', [])}
+        contact_team_map: Dict[str, Dict] = {}
+
+        for edge in results.get('edges', []):
+            source = node_info.get(edge.get('source_node_uuid'), {})
+            target = node_info.get(edge.get('target_node_uuid'), {})
+            source_labels = source.get('labels', [])
+            target_labels = target.get('labels', [])
+
+            contact_uuid = None
+            team_member_name = None
+
+            if 'TeamMember' in source_labels and 'Contact' in target_labels:
+                contact_uuid = edge['target_node_uuid']
+                team_member_name = source.get('name', 'Unknown')
+            elif 'Contact' in source_labels and 'TeamMember' in target_labels:
+                contact_uuid = edge['source_node_uuid']
+                team_member_name = target.get('name', 'Unknown')
+
+            if contact_uuid and team_member_name:
+                if contact_uuid not in contact_team_map:
+                    contact_node = node_info.get(contact_uuid, {})
+                    contact_team_map[contact_uuid] = {
+                        'contact_name': contact_node.get('name', 'Unknown'),
+                        'team_members': set(),
+                        'interactions': [],
+                    }
+                contact_team_map[contact_uuid]['team_members'].add(team_member_name)
+                contact_team_map[contact_uuid]['interactions'].append({
+                    'team_member': team_member_name,
+                    'type': edge.get('name'),
+                    'fact': edge.get('fact'),
+                })
+
+        overlaps = []
+        for data in contact_team_map.values():
+            if len(data['team_members']) >= 2:
+                overlaps.append({
+                    'contact_name': data['contact_name'],
+                    'team_members': sorted(data['team_members']),
+                    'team_member_count': len(data['team_members']),
+                    'interactions': data['interactions'],
+                })
+
+        return sorted(overlaps, key=lambda x: x['team_member_count'], reverse=True)
+
+    async def query_stakeholder_map(
+        self,
+        account_name: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Map stakeholders: champions, blockers, decision-makers per account.
+
+        Uses INVOLVED_IN, REPORTS_TO, and WORKS_AT edges.
+        """
+        results = await self.search_account(
+            account_name,
+            "Who are the champions, blockers, decision-makers, influencers, and technical evaluators? What are their roles in opportunities?",
+            num_results=200,
+        )
+
+        node_names = {n['uuid']: n['name'] for n in results.get('nodes', [])}
+        stakeholders = []
+
+        for edge in results.get('edges', []):
+            edge_name = (edge.get('name') or '').upper()
+            if edge_name in ['INVOLVED_IN', 'REPORTS_TO', 'WORKS_AT']:
+                source_name = node_names.get(edge.get('source_node_uuid'), 'Unknown')
+                target_name = node_names.get(edge.get('target_node_uuid'), 'Unknown')
+                stakeholders.append({
+                    'person': source_name,
+                    'relationship': edge_name,
+                    'target': target_name,
+                    'fact': edge.get('fact', ''),
+                    'valid_at': edge.get('valid_at'),
+                })
+
+        return stakeholders
+
+    async def query_engagement_gaps(
+        self,
+        account_name: str,
+        days_threshold: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find contacts not interacted with recently.
+
+        Compares contacts list against recent episodes to find gaps.
+        """
+        contacts_results = await self.search_account(
+            account_name,
+            "All contacts and people at this account",
+            num_results=200,
+        )
+
+        recent = await self.query_recent_communications(account_name, limit=100)
+
+        # Build set of names found in recent communications
+        recent_names = set()
+        for comm in recent:
+            content_lower = (comm.get('content', '') or '').lower()
+            for node in contacts_results.get('nodes', []):
+                node_name = node.get('name', '')
+                if node_name and node_name.lower() in content_lower:
+                    recent_names.add(node_name.lower())
+
+        gaps = []
+        for node in contacts_results.get('nodes', []):
+            labels = node.get('labels', [])
+            if 'Contact' in labels:
+                name = node.get('name', '')
+                if name.lower() not in recent_names:
+                    gaps.append({
+                        'contact_name': name,
+                        'last_known_interaction': node.get('created_at'),
+                        'summary': node.get('summary'),
+                    })
+
+        return gaps
+
+    async def query_cross_branch_connections(
+        self,
+        account_name: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find connections across branches/divisions of an account.
+        """
+        results = await self.search_account(
+            account_name,
+            "What branches, divisions, and business units exist? Which contacts belong to which branch?",
+            num_results=200,
+        )
+
+        node_names = {n['uuid']: n['name'] for n in results.get('nodes', [])}
+        branches = []
+
+        for edge in results.get('edges', []):
+            edge_name = (edge.get('name') or '').upper()
+            if edge_name == 'BELONGS_TO_BRANCH':
+                source_name = node_names.get(edge.get('source_node_uuid'), 'Unknown')
+                target_name = node_names.get(edge.get('target_node_uuid'), 'Unknown')
+                branches.append({
+                    'entity': source_name,
+                    'branch': target_name,
+                    'fact': edge.get('fact'),
+                })
+
+        return branches
+
+    async def query_combined_opportunities(
+        self,
+        account_name: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect opportunities and who is involved (champions, blockers, etc.).
+        """
+        results = await self.search_account(
+            account_name,
+            "What sales opportunities exist? Who is involved as champion, blocker, decision-maker?",
+            num_results=200,
+        )
+
+        node_info = {n['uuid']: n for n in results.get('nodes', [])}
+
+        opportunities: Dict[str, Dict] = {}
+        for node in results.get('nodes', []):
+            if 'Opportunity' in node.get('labels', []):
+                opportunities[node['uuid']] = {
+                    'name': node.get('name'),
+                    'summary': node.get('summary'),
+                    'attributes': node.get('attributes', {}),
+                    'involved': [],
+                }
+
+        for edge in results.get('edges', []):
+            edge_name = (edge.get('name') or '').upper()
+            target_uuid = edge.get('target_node_uuid')
+
+            if edge_name == 'INVOLVED_IN' and target_uuid in opportunities:
+                source = node_info.get(edge.get('source_node_uuid'), {})
+                opportunities[target_uuid]['involved'].append({
+                    'person': source.get('name', 'Unknown'),
+                    'role': edge.get('fact', ''),
+                })
+            elif edge_name == 'HAS_OPPORTUNITY' and target_uuid in opportunities:
+                source = node_info.get(edge.get('source_node_uuid'), {})
+                opportunities[target_uuid]['account'] = source.get('name', 'Unknown')
+
+        return list(opportunities.values())
+
     # === Helper methods ===
 
     def _normalize_group_id(self, account_name: str) -> str:
         """Normalize account name to valid group_id"""
         return account_name.lower().replace(' ', '-').replace('.', '-').replace('_', '-')
+
+    def _detect_channel(self, text: str) -> str:
+        """Detect communication channel from source description or name."""
+        text_lower = text.lower()
+        if 'email' in text_lower:
+            return 'email'
+        if 'call' in text_lower or 'phone' in text_lower:
+            return 'call'
+        if 'text' in text_lower or 'sms' in text_lower or 'whatsapp' in text_lower:
+            return 'sms'
+        if 'linkedin' in text_lower or 'social' in text_lower or 'twitter' in text_lower:
+            return 'social'
+        if 'meeting' in text_lower:
+            return 'meeting'
+        return 'unknown'
+
+    def _detect_direction(self, text: str) -> Optional[str]:
+        """Detect communication direction from source description."""
+        text_lower = text.lower()
+        if 'outbound' in text_lower:
+            return 'outbound'
+        if 'inbound' in text_lower:
+            return 'inbound'
+        return None
 
     def _node_to_dict(self, node) -> Dict[str, Any]:
         """Convert node to dictionary"""
@@ -377,6 +759,8 @@ class GraphitiService:
             'Topic': '#96CEB4',
             'PersonalDetail': '#FFEAA7',
             'Communication': '#DDA0DD',
+            'Opportunity': '#FFB347',
+            'Branch': '#FF69B4',
             'Entity': '#999999',
         }
 
