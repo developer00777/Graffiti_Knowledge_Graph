@@ -17,7 +17,7 @@ SCOPES = [
     'https://www.googleapis.com/auth/gmail.metadata',
 ]
 
-# Your OAuth credentials
+# Your OAuth credentials — set these in your environment or .env file
 CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 

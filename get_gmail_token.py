@@ -8,9 +8,9 @@ then you paste the authorization code back to get your refresh token.
 import os
 import urllib.parse
 
-# Your OAuth credentials
+# Your OAuth credentials — set these in your environment or .env file
 CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-CLIENT_SECRET = "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"
+CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
 # Gmail API scopes
 SCOPES = [
