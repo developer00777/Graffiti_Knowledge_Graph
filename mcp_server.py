@@ -14,14 +14,22 @@ from fastmcp import FastMCP
 
 logger = logging.getLogger(__name__)
 
+# Holds the shared GraphitiService instance — set by api_server at startup
+# via set_service(), avoiding a circular import at call time.
+_graphiti_service = None
+
+
+def set_service(service) -> None:
+    """Called by api_server during lifespan startup to inject the service."""
+    global _graphiti_service
+    _graphiti_service = service
+
 
 def _get_service():
-    """Get the shared GraphitiService instance from api_server."""
-    from api_server import graphiti_service
-
-    if not graphiti_service:
+    """Return the injected GraphitiService or raise if not yet set."""
+    if not _graphiti_service:
         raise RuntimeError("CHAMP Graph service not initialized")
-    return graphiti_service
+    return _graphiti_service
 
 
 mcp = FastMCP(

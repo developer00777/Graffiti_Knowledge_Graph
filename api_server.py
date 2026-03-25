@@ -36,13 +36,13 @@ from api.models import (
 )
 from config.settings import get_settings
 from services.graphiti_service import GraphitiService
+import mcp_server as _mcp_module
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global service instances
 graphiti_service: Optional[GraphitiService] = None
-sync_service = None  # Set in Phase 6
 _start_time: float = 0.0
 
 
@@ -56,7 +56,7 @@ def _require_service() -> GraphitiService:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
-    global graphiti_service, sync_service, _start_time
+    global graphiti_service, _start_time
     _start_time = time.time()
     settings = get_settings()
 
@@ -67,13 +67,18 @@ async def lifespan(app: FastAPI):
         openai_api_key=settings.openai_api_key,
         openai_base_url=settings.openai_base_url,
         model_name=settings.model_name,
+        ollama_base_url=settings.ollama_base_url,
+        ollama_embed_model=settings.ollama_embed_model,
     )
 
     await graphiti_service.connect()
+    _mcp_module.set_service(graphiti_service)
     logger.info("CHAMP Graph service connected")
 
-    # Phase 6: SyncService initialization will go here
-    # sync_service = SyncService(graphiti_service=graphiti_service)
+    if not settings.api_key:
+        logger.warning(
+            "API key auth is DISABLED — set CHAMP_GRAPH_API_KEY to enable authentication"
+        )
 
     yield
 
@@ -88,9 +93,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_cors_origins_raw = os.getenv("CORS_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -114,8 +122,10 @@ async def health_check():
     neo4j_ok = False
     if graphiti_service and graphiti_service.client:
         try:
+            await graphiti_service.client.driver.execute_query("RETURN 1")
             neo4j_ok = True
-        except Exception:
+        except Exception as e:
+            logger.warning("Neo4j health check failed: %s", e)
             neo4j_ok = False
 
     status = "healthy" if neo4j_ok else "degraded"
@@ -222,24 +232,9 @@ async def trigger_sync(
     request: SyncTriggerRequest = SyncTriggerRequest(),
 ):
     """Trigger adapter-based sync for an account."""
-    if not sync_service:
-        raise HTTPException(
-            status_code=501,
-            detail="Sync service not configured. Use POST /api/ingest to push data directly.",
-        )
-
-    task = await sync_service.sync_account(
-        account_name=account_name,
-        source_type=request.source_type,
-        since=request.since,
-        until=request.until,
-        full_sync=request.full_sync,
-    )
-
-    return SyncTriggerResponse(
-        message=f"Sync {task.status}: {task.items_processed} items processed",
-        account_name=account_name,
-        items_processed=task.items_processed,
+    raise HTTPException(
+        status_code=501,
+        detail="Adapter-based sync is not yet configured. Use POST /api/ingest to push data directly.",
     )
 
 
@@ -250,10 +245,7 @@ async def trigger_sync(
 )
 async def get_sync_status():
     """Get sync state for all accounts."""
-    if not sync_service:
-        return SyncStatusResponse(accounts={})
-
-    return SyncStatusResponse(accounts=sync_service.get_sync_status())
+    return SyncStatusResponse(accounts={})
 
 
 # ============================================================

@@ -4,14 +4,13 @@ Microsoft Outlook/365 adapter using Microsoft Graph API.
 Requires Azure AD app registration with Mail.Read permissions.
 """
 import logging
-import re
-from datetime import datetime
-from html import unescape
+from datetime import datetime, timezone
 from typing import AsyncIterator, Dict, List, Optional
 
 import httpx
 
 from adapters.base_adapter import BaseEmailAdapter
+from adapters.utils import strip_html
 from models.email import Email, EmailDirection
 
 logger = logging.getLogger(__name__)
@@ -318,7 +317,7 @@ class OutlookAdapter(BaseEmailAdapter):
                 # Handle ISO format with Z suffix
                 timestamp = datetime.fromisoformat(received_dt.replace('Z', '+00:00'))
             else:
-                timestamp = datetime.now()
+                timestamp = datetime.now(timezone.utc)
 
             # Subject
             subject = msg.get('subject', '(no subject)')
@@ -347,13 +346,4 @@ class OutlookAdapter(BaseEmailAdapter):
 
     def _strip_html(self, html: str) -> str:
         """Strip HTML tags and return plain text"""
-        # Remove script and style elements
-        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        # Remove HTML tags
-        html = re.sub(r'<[^>]+>', ' ', html)
-        # Decode HTML entities
-        html = unescape(html)
-        # Clean up whitespace
-        html = re.sub(r'\s+', ' ', html).strip()
-        return html
+        return strip_html(html)

@@ -1,0 +1,24 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    zstd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Ollama via official install script (handles binary + deps)
+ENV OLLAMA_INSTALL_DIR=/usr/local
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Pre-pull embeddinggemma:latest at build time so the container starts ready
+RUN ollama serve & \
+    SERVER_PID=$! && \
+    sleep 8 && \
+    ollama pull embeddinggemma:latest && \
+    kill $SERVER_PID
+
+EXPOSE 11434
+
+ENV OLLAMA_HOST=0.0.0.0
+
+CMD ["/usr/local/bin/ollama", "serve"]

@@ -6,13 +6,14 @@ Requires Google OAuth2 credentials with Gmail API access.
 import base64
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncIterator, Dict, List, Optional
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build, Resource
 
 from adapters.base_adapter import BaseEmailAdapter
+from adapters.utils import strip_html
 from models.email import Email, EmailDirection
 
 logger = logging.getLogger(__name__)
@@ -291,8 +292,8 @@ class GmailAdapter(BaseEmailAdapter):
             # Check for attachments
             has_attachments = self._has_attachments(msg.get('payload', {}))
 
-            # Parse timestamp
-            timestamp = datetime.fromtimestamp(int(msg['internalDate']) / 1000)
+            # Parse timestamp (UTC-aware)
+            timestamp = datetime.fromtimestamp(int(msg['internalDate']) / 1000, tz=timezone.utc)
 
             # Check if reply
             subject = headers.get('subject', '(no subject)')
@@ -387,17 +388,7 @@ class GmailAdapter(BaseEmailAdapter):
 
     def _strip_html(self, html: str) -> str:
         """Strip HTML tags and return plain text"""
-        # Remove script and style elements
-        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        # Remove HTML tags
-        html = re.sub(r'<[^>]+>', ' ', html)
-        # Decode HTML entities
-        from html import unescape
-        html = unescape(html)
-        # Clean up whitespace
-        html = re.sub(r'\s+', ' ', html).strip()
-        return html
+        return strip_html(html)
 
     def _has_attachments(self, payload: Dict) -> bool:
         """Check if message has attachments"""

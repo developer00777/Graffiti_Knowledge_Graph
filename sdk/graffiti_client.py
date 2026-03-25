@@ -61,11 +61,13 @@ class GraffitiClient:
         api_key: Optional[str] = None,
         timeout: float = 30.0,
         max_retries: int = 2,
+        max_connections: int = 20,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
         self.max_retries = max_retries
+        self.max_connections = max_connections
         self._client: Optional[httpx.AsyncClient] = None
 
     async def __aenter__(self):
@@ -84,6 +86,10 @@ class GraffitiClient:
             base_url=self.base_url,
             headers=headers,
             timeout=self.timeout,
+            limits=httpx.Limits(
+                max_connections=self.max_connections,
+                max_keepalive_connections=self.max_connections // 2,
+            ),
         )
 
     async def disconnect(self) -> None:

@@ -26,6 +26,7 @@ async def verify_api_key(
     settings = get_settings()
 
     if not settings.api_key:
+        logger.debug("API key auth is disabled — no CHAMP_GRAPH_API_KEY configured")
         return None
 
     if not api_key:

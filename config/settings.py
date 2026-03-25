@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Neo4j Configuration
     neo4j_uri: str = Field(default="bolt://localhost:7687")
     neo4j_user: str = Field(default="neo4j")
-    neo4j_password: str = Field(default="password")
+    neo4j_password: str = Field(..., description="Neo4j password — must be set via NEO4J_PASSWORD env var")
 
     # Google Workspace Configuration
     google_client_id: Optional[str] = Field(default=None)
@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     ms_client_secret: Optional[str] = Field(default=None)
     ms_tenant_id: Optional[str] = Field(default=None)
     ms_user_email: Optional[str] = Field(default=None)
+
+    # Ollama Embedder Configuration
+    ollama_base_url: str = Field(default="http://localhost:11434")
+    ollama_embed_model: str = Field(default="embeddinggemma:latest")
 
     # API Authentication
     api_key: Optional[str] = Field(default=None, description="API key for X-API-Key header auth. If unset, auth is disabled.")

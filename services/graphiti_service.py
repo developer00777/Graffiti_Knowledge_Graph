@@ -11,7 +11,10 @@ from typing import Any, Dict, List, Optional
 
 from graphiti_core import Graphiti
 from graphiti_core.llm_client import LLMClient, OpenAIClient
-from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder
+from graphiti_core.llm_client.config import LLMConfig
+from graphiti_core.embedder import EmbedderClient
+
+from services.ollama_embedder import OllamaEmbedder
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.utils.bulk_utils import RawEpisode
 from graphiti_core.search.search_config_recipes import (
@@ -47,6 +50,8 @@ class GraphitiService:
         openai_api_key: Optional[str] = None,
         openai_base_url: Optional[str] = None,
         model_name: Optional[str] = None,
+        ollama_base_url: str = "http://localhost:11434",
+        ollama_embed_model: str = "embeddinggemma:latest",
     ):
         """
         Initialize GraphitiService.
@@ -62,9 +67,13 @@ class GraphitiService:
         openai_api_key : str, optional
             API key for LLM (OpenAI or OpenRouter)
         openai_base_url : str, optional
-            Base URL for API (for OpenRouter: "https://openrouter.ai/api/v1")
+            Base URL for LLM API (for OpenRouter: "https://openrouter.ai/api/v1")
         model_name : str, optional
-            Model name to use
+            LLM model name to use for entity extraction
+        ollama_base_url : str
+            Base URL for the local Ollama server (default: "http://localhost:11434")
+        ollama_embed_model : str
+            Ollama model name for vector embeddings (default: "embeddinggemma:latest")
         """
         self.neo4j_uri = neo4j_uri
         self.neo4j_user = neo4j_user
@@ -72,6 +81,8 @@ class GraphitiService:
         self.openai_api_key = openai_api_key
         self.openai_base_url = openai_base_url
         self.model_name = model_name
+        self.ollama_base_url = ollama_base_url
+        self.ollama_embed_model = ollama_embed_model
 
         self.client: Optional[Graphiti] = None
 
@@ -84,20 +95,27 @@ class GraphitiService:
         """Initialize Graphiti client and build indices"""
         logger.info(f"Connecting to Neo4j at {self.neo4j_uri}")
 
-        # Create LLM client with OpenRouter configuration if specified
+        # LLM client (OpenRouter/OpenAI) — used for entity extraction
         llm_client = None
-        embedder = None
-
         if self.openai_api_key:
             llm_client = OpenAIClient(
-                api_key=self.openai_api_key,
-                base_url=self.openai_base_url,
-                model=self.model_name,
+                config=LLMConfig(
+                    api_key=self.openai_api_key,
+                    base_url=self.openai_base_url,
+                    model=self.model_name,
+                )
             )
-            embedder = OpenAIEmbedder(
-                api_key=self.openai_api_key,
-                base_url=self.openai_base_url,
-            )
+
+        # Embedder — always use local Ollama with embeddinggemma:latest
+        embedder = OllamaEmbedder(
+            model=self.ollama_embed_model,
+            base_url=self.ollama_base_url,
+        )
+        logger.info(
+            "Using Ollama embedder: model=%s url=%s",
+            self.ollama_embed_model,
+            self.ollama_base_url,
+        )
 
         self.client = Graphiti(
             uri=self.neo4j_uri,

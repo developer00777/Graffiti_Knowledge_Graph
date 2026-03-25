@@ -19,6 +19,22 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
   champ-graph:
     build: .
     ports:
@@ -32,13 +48,19 @@ services:
       - MODEL_NAME=${MODEL_NAME:-anthropic/claude-sonnet-4}
       - CHAMP_GRAPH_API_KEY=${CHAMP_GRAPH_API_KEY:-}
       - TEAM_DOMAINS=${TEAM_DOMAINS:-yourcompany.com}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:latest}
       - API_HOST=0.0.0.0
       - API_PORT=8080
     depends_on:
       neo4j:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   neo4j_data:
   neo4j_logs:
+  ollama_data:

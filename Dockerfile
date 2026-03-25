@@ -6,9 +6,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
+# Install server dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 120 --retries 5 -r requirements.txt
 
+# Install CLI package
+COPY cli/ ./cli/
+RUN pip install --no-cache-dir --timeout 120 --retries 5 -e ./cli/
+
+# Copy application source
 COPY . .
 
 EXPOSE 8080

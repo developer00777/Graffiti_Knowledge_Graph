@@ -4,7 +4,7 @@ Email sync orchestration service.
 Coordinates syncing emails from providers to the knowledge graph.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from adapters.base_adapter import BaseEmailAdapter
@@ -53,6 +53,7 @@ class EmailSyncService:
         self.accounts = accounts or TOP_ACCOUNTS
         self.batch_size = batch_size
         self.sync_state: Dict[str, datetime] = {}  # Track last sync per account
+        self._seen_message_ids: set = set()  # Dedup across domain passes
 
     async def sync_all_accounts(
         self,
@@ -126,9 +127,9 @@ class EmailSyncService:
         """
         # Determine sync start date
         if full_sync:
-            sync_since = since or (datetime.now() - timedelta(days=365))
+            sync_since = since or (datetime.now(timezone.utc) - timedelta(days=365))
         else:
-            sync_since = self.sync_state.get(account.name) or since or (datetime.now() - timedelta(days=30))
+            sync_since = self.sync_state.get(account.name) or since or (datetime.now(timezone.utc) - timedelta(days=30))
 
         sync_until = until
 
@@ -136,6 +137,7 @@ class EmailSyncService:
 
         emails_batch: List[Email] = []
         total_processed = 0
+        seen_this_sync: set = set()  # Dedup within this sync run
 
         # Fetch emails for each domain associated with this account
         for domain in account.domains:
@@ -147,6 +149,13 @@ class EmailSyncService:
                     since=sync_since,
                     until=sync_until,
                 ):
+                    # Skip duplicates (same email matched by multiple domains)
+                    msg_id = getattr(email, "message_id", None)
+                    if msg_id:
+                        if msg_id in seen_this_sync:
+                            continue
+                        seen_this_sync.add(msg_id)
+
                     # Enrich email with account info
                     email.account_name = account.name
                     email.account_domain = domain
@@ -176,7 +185,7 @@ class EmailSyncService:
             total_processed += len(emails_batch)
 
         # Update sync state
-        self.sync_state[account.name] = datetime.now()
+        self.sync_state[account.name] = datetime.now(timezone.utc)
 
         logger.info(f"Completed sync for {account.name}: {total_processed} emails")
         return total_processed
@@ -195,7 +204,7 @@ class EmailSyncService:
         dict
             Sync results per account
         """
-        since = datetime.now() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
         logger.info(f"Running incremental sync (last {hours} hours)")
         return await self.sync_all_accounts(since=since)
 
