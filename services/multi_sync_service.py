@@ -187,7 +187,7 @@ class SyncService:
 
     def _build_episode_name(self, item: BaseModel, source_type: str) -> str:
         """Build a human-readable episode name from a model instance."""
-        if hasattr(item, "subject"):
+        if hasattr(item, "subject") and item.subject:
             return f"Email: {item.subject[:50]}"
         if hasattr(item, "title") and item.title:
             return f"{source_type.capitalize()}: {item.title[:50]}"

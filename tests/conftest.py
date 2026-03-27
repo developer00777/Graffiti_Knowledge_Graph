@@ -2,7 +2,7 @@
 Shared test fixtures for CHAMP Graph test suite.
 """
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -13,7 +13,13 @@ from services.graphiti_service import GraphitiService
 def mock_graphiti_service():
     """Mocked GraphitiService that doesn't require Neo4j."""
     service = AsyncMock(spec=GraphitiService)
-    service.client = True  # Truthy so health check sees it as connected
+
+    # Mock client with a driver whose execute_query succeeds (for health check)
+    mock_driver = MagicMock()
+    mock_driver.execute_query = AsyncMock(return_value=None)
+    mock_client = MagicMock()
+    mock_client.driver = mock_driver
+    service.client = mock_client
 
     empty_results = {"nodes": [], "edges": [], "communities": []}
     service.search_account = AsyncMock(return_value=empty_results)

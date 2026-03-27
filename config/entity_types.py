@@ -4,14 +4,17 @@ Custom entity types for CHAMP Graph knowledge graph extraction.
 These Pydantic models guide the LLM to extract specific entity types
 from multi-modal communication content (emails, calls, SMS, LinkedIn, meetings),
 improving extraction accuracy for sales/marketing use cases.
+
+Note: Fields cannot use graphiti-core's protected EntityNode attribute names:
+  uuid, name, group_id, labels, created_at, name_embedding, summary, attributes
 """
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
 class Contact(BaseModel):
     """A person at a target account (prospect, customer, etc.)"""
-    name: str = Field(..., description="Full name of the contact")
+    full_name: str = Field(..., description="Full name of the contact")
     email: Optional[str] = Field(None, description="Email address")
     title: Optional[str] = Field(None, description="Job title or role")
     department: Optional[str] = Field(None, description="Department they work in")
@@ -19,14 +22,14 @@ class Contact(BaseModel):
 
 class Account(BaseModel):
     """A target company/account (MQA - Marketing Qualified Account)"""
-    name: str = Field(..., description="Company or organization name")
+    company_name: str = Field(..., description="Company or organization name")
     domain: Optional[str] = Field(None, description="Primary email domain")
     industry: Optional[str] = Field(None, description="Industry vertical")
 
 
 class TeamMember(BaseModel):
     """A member of your internal sales/marketing team"""
-    name: str = Field(..., description="Full name of team member")
+    full_name: str = Field(..., description="Full name of team member")
     email: Optional[str] = Field(None, description="Email address")
     role: Optional[str] = Field(None, description="Role: SDR, AE, CSM, Marketing, etc.")
 
@@ -46,7 +49,7 @@ class PersonalDetail(BaseModel):
 
 class Topic(BaseModel):
     """A discussion topic or business theme"""
-    name: str = Field(..., description="Name of the topic or theme")
+    topic_name: str = Field(..., description="Name of the topic or theme")
     category: Optional[str] = Field(
         None,
         description="Category: pricing, product, support, partnership, contract, demo, etc."
@@ -71,7 +74,7 @@ class Communication(BaseModel):
 
 class Opportunity(BaseModel):
     """A sales opportunity or deal being pursued with an account"""
-    name: str = Field(..., description="Opportunity or deal name")
+    opportunity_name: str = Field(..., description="Opportunity or deal name")
     stage: Optional[str] = Field(
         None,
         description="Stage: prospect, discovery, proposal, negotiation, closed-won, closed-lost"
@@ -81,7 +84,7 @@ class Opportunity(BaseModel):
 
 class Branch(BaseModel):
     """A branch, division, or business unit of an account"""
-    name: str = Field(..., description="Branch, division, or business unit name")
+    branch_name: str = Field(..., description="Branch, division, or business unit name")
     location: Optional[str] = Field(None, description="Geographic location")
     parent_account: Optional[str] = Field(None, description="Parent company name")
 

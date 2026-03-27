@@ -95,14 +95,38 @@ class GraphitiService:
         """Initialize Graphiti client and build indices"""
         logger.info(f"Connecting to Neo4j at {self.neo4j_uri}")
 
-        # LLM client (OpenRouter/OpenAI) — used for entity extraction
-        llm_client = None
-        if self.openai_api_key:
+        # LLM client — OpenRouter if a real API key is set, else fall back to local Ollama
+        _key = (self.openai_api_key or "").strip()
+        _use_openrouter = bool(_key) and _key.lower() not in ("ollama", "none", "")
+        if _use_openrouter:
+            logger.info(
+                "LLM: OpenRouter/OpenAI — base_url=%s model=%s",
+                self.openai_base_url,
+                self.model_name,
+            )
             llm_client = OpenAIClient(
                 config=LLMConfig(
-                    api_key=self.openai_api_key,
+                    api_key=_key,
                     base_url=self.openai_base_url,
                     model=self.model_name,
+                    small_model=self.model_name,
+                )
+            )
+        else:
+            _ollama_llm_url = self.ollama_base_url.rstrip("/") + "/v1"
+            _ollama_model = "llama3.2:latest"
+            logger.warning(
+                "OPENAI_API_KEY not set or is placeholder — falling back to local Ollama LLM: "
+                "base_url=%s model=%s",
+                _ollama_llm_url,
+                _ollama_model,
+            )
+            llm_client = OpenAIClient(
+                config=LLMConfig(
+                    api_key="ollama",
+                    base_url=_ollama_llm_url,
+                    model=_ollama_model,
+                    small_model=_ollama_model,
                 )
             )
 

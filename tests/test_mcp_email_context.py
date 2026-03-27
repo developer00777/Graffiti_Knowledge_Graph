@@ -2,15 +2,18 @@
 import pytest
 
 import api_server
+import mcp_server
 from mcp_server import get_email_context
 
 
 @pytest.fixture
 def service(mock_graphiti_service):
-    """Inject mock service into api_server global."""
+    """Inject mock service into api_server and mcp_server globals."""
     api_server.graphiti_service = mock_graphiti_service
+    mcp_server.set_service(mock_graphiti_service)
     yield mock_graphiti_service
     api_server.graphiti_service = None
+    mcp_server.set_service(None)
 
 
 class TestGetEmailContext:
