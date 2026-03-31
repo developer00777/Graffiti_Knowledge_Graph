@@ -19,33 +19,6 @@ services:
       timeout: 5s
       retries: 5
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
-    restart: unless-stopped
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    depends_on:
-      ollama:
-        condition: service_healthy
-    volumes:
-      - ollama_data:/root/.ollama
-    entrypoint: ["ollama", "pull", "embeddinggemma:latest"]
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-
   champ-graph:
     build: .
     ports:
@@ -60,18 +33,17 @@ services:
       - CHAMP_GRAPH_API_KEY=${CHAMP_GRAPH_API_KEY:-}
       - TEAM_DOMAINS=${TEAM_DOMAINS:-yourcompany.com}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:latest}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
+      - EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL:-}
       - API_HOST=0.0.0.0
       - API_PORT=8080
     depends_on:
       neo4j:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   neo4j_data:
   neo4j_logs:
-  ollama_data:

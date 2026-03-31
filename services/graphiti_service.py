@@ -13,8 +13,8 @@ from graphiti_core import Graphiti
 from graphiti_core.llm_client import LLMClient, OpenAIClient
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.embedder import EmbedderClient
+from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 
-from services.ollama_embedder import OllamaEmbedder
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.utils.bulk_utils import RawEpisode
 from graphiti_core.search.search_config_recipes import (
@@ -50,8 +50,9 @@ class GraphitiService:
         openai_api_key: Optional[str] = None,
         openai_base_url: Optional[str] = None,
         model_name: Optional[str] = None,
-        ollama_base_url: str = "http://localhost:11434",
-        ollama_embed_model: str = "embeddinggemma:latest",
+        embedding_model: str = "openai/text-embedding-3-small",
+        embedding_api_key: Optional[str] = None,
+        embedding_base_url: Optional[str] = None,
     ):
         """
         Initialize GraphitiService.
@@ -70,10 +71,12 @@ class GraphitiService:
             Base URL for LLM API (for OpenRouter: "https://openrouter.ai/api/v1")
         model_name : str, optional
             LLM model name to use for entity extraction
-        ollama_base_url : str
-            Base URL for the local Ollama server (default: "http://localhost:11434")
-        ollama_embed_model : str
-            Ollama model name for vector embeddings (default: "embeddinggemma:latest")
+        embedding_model : str
+            Model name for OpenAI-compatible embedding provider
+        embedding_api_key : str, optional
+            API key for embedding provider (defaults to openai_api_key)
+        embedding_base_url : str, optional
+            Base URL for embedding provider (defaults to openai_base_url)
         """
         self.neo4j_uri = neo4j_uri
         self.neo4j_user = neo4j_user
@@ -81,8 +84,9 @@ class GraphitiService:
         self.openai_api_key = openai_api_key
         self.openai_base_url = openai_base_url
         self.model_name = model_name
-        self.ollama_base_url = ollama_base_url
-        self.ollama_embed_model = ollama_embed_model
+        self.embedding_model = embedding_model
+        self.embedding_api_key = embedding_api_key or openai_api_key
+        self.embedding_base_url = embedding_base_url or openai_base_url
 
         self.client: Optional[Graphiti] = None
 
@@ -95,50 +99,37 @@ class GraphitiService:
         """Initialize Graphiti client and build indices"""
         logger.info(f"Connecting to Neo4j at {self.neo4j_uri}")
 
-        # LLM client — OpenRouter if a real API key is set, else fall back to local Ollama
         _key = (self.openai_api_key or "").strip()
-        _use_openrouter = bool(_key) and _key.lower() not in ("ollama", "none", "")
-        if _use_openrouter:
-            logger.info(
-                "LLM: OpenRouter/OpenAI — base_url=%s model=%s",
-                self.openai_base_url,
-                self.model_name,
-            )
-            llm_client = OpenAIClient(
-                config=LLMConfig(
-                    api_key=_key,
-                    base_url=self.openai_base_url,
-                    model=self.model_name,
-                    small_model=self.model_name,
-                )
-            )
-        else:
-            _ollama_llm_url = self.ollama_base_url.rstrip("/") + "/v1"
-            _ollama_model = "llama3.2:latest"
-            logger.warning(
-                "OPENAI_API_KEY not set or is placeholder — falling back to local Ollama LLM: "
-                "base_url=%s model=%s",
-                _ollama_llm_url,
-                _ollama_model,
-            )
-            llm_client = OpenAIClient(
-                config=LLMConfig(
-                    api_key="ollama",
-                    base_url=_ollama_llm_url,
-                    model=_ollama_model,
-                    small_model=_ollama_model,
-                )
+        if not _key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is required. Set it to your OpenRouter or OpenAI API key."
             )
 
-        # Embedder — always use local Ollama with embeddinggemma:latest
-        embedder = OllamaEmbedder(
-            model=self.ollama_embed_model,
-            base_url=self.ollama_base_url,
+        logger.info(
+            "LLM: OpenRouter/OpenAI — base_url=%s model=%s",
+            self.openai_base_url,
+            self.model_name,
+        )
+        llm_client = OpenAIClient(
+            config=LLMConfig(
+                api_key=_key,
+                base_url=self.openai_base_url,
+                model=self.model_name,
+                small_model=self.model_name,
+            )
+        )
+
+        embedder = OpenAIEmbedder(
+            config=OpenAIEmbedderConfig(
+                api_key=self.embedding_api_key,
+                base_url=self.embedding_base_url,
+                embedding_model=self.embedding_model,
+            ),
         )
         logger.info(
-            "Using Ollama embedder: model=%s url=%s",
-            self.ollama_embed_model,
-            self.ollama_base_url,
+            "Embedder: model=%s base_url=%s",
+            self.embedding_model,
+            self.embedding_base_url,
         )
 
         self.client = Graphiti(

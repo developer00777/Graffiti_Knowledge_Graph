@@ -37,9 +37,10 @@ class Settings(BaseSettings):
     ms_tenant_id: Optional[str] = Field(default=None)
     ms_user_email: Optional[str] = Field(default=None)
 
-    # Ollama Embedder Configuration
-    ollama_base_url: str = Field(default="http://localhost:11434")
-    ollama_embed_model: str = Field(default="embeddinggemma:latest")
+    # Embedding Configuration (OpenAI-compatible API)
+    embedding_model: str = Field(default="openai/text-embedding-3-small", description="Embedding model name for OpenAI-compatible provider")
+    embedding_api_key: Optional[str] = Field(default=None, description="API key for embedding provider (defaults to OPENAI_API_KEY)")
+    embedding_base_url: Optional[str] = Field(default=None, description="Base URL for embedding provider (defaults to OPENAI_BASE_URL)")
 
     # API Authentication
     api_key: Optional[str] = Field(default=None, description="API key for X-API-Key header auth. If unset, auth is disabled.")

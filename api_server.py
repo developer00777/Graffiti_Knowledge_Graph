@@ -67,8 +67,9 @@ async def lifespan(app: FastAPI):
         openai_api_key=settings.openai_api_key,
         openai_base_url=settings.openai_base_url,
         model_name=settings.model_name,
-        ollama_base_url=settings.ollama_base_url,
-        ollama_embed_model=settings.ollama_embed_model,
+        embedding_model=settings.embedding_model,
+        embedding_api_key=settings.embedding_api_key,
+        embedding_base_url=settings.embedding_base_url,
     )
 
     await graphiti_service.connect()
