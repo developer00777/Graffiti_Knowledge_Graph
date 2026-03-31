@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # OpenRouter/OpenAI Configuration
     openai_api_key: str = Field(default="")
     openai_base_url: Optional[str] = Field(default="https://openrouter.ai/api/v1")
-    model_name: str = Field(default="anthropic/claude-sonnet-4")
+    model_name: str = Field(default="openai/gpt-4.1-nano")
 
     # Neo4j Configuration
     neo4j_uri: str = Field(default="bolt://localhost:7687")
