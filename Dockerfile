@@ -17,7 +17,4 @@ COPY . .
 ENV PORT=8080
 EXPOSE ${PORT}
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD python -c "import httpx; import os; r = httpx.get(f'http://localhost:{os.environ.get(\"PORT\", 8080)}/health'); assert r.status_code == 200"
-
 CMD python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT

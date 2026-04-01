@@ -5,6 +5,7 @@ Centralized High-context Agent Memory Platform.
 Provides REST endpoints for ingesting multi-modal data and querying
 the knowledge graph.
 """
+import asyncio
 import logging
 import os
 import time
@@ -72,9 +73,28 @@ async def lifespan(app: FastAPI):
         embedding_base_url=settings.embedding_base_url,
     )
 
-    await graphiti_service.connect()
-    _mcp_module.set_service(graphiti_service)
-    logger.info("CHAMP Graph service connected")
+    # Retry connecting to Neo4j — on Railway both services start simultaneously
+    # so Neo4j may not be ready immediately.
+    _max_attempts = 10
+    _retry_delay = 10  # seconds
+    for attempt in range(1, _max_attempts + 1):
+        try:
+            await graphiti_service.connect()
+            _mcp_module.set_service(graphiti_service)
+            logger.info("CHAMP Graph service connected to Neo4j")
+            break
+        except Exception as e:
+            logger.warning(
+                "Neo4j connection attempt %d/%d failed: %s", attempt, _max_attempts, e
+            )
+            if attempt < _max_attempts:
+                await asyncio.sleep(_retry_delay)
+            else:
+                logger.error(
+                    "Could not connect to Neo4j after %d attempts. "
+                    "Starting in degraded mode — data endpoints will return 503.",
+                    _max_attempts,
+                )
 
     if not settings.api_key:
         logger.warning(
